@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: Recetario Forever
+## Notes: Todas las recetas de tus profesiones: conocidas / no conocidas, fuente (instructor, vendedor, botín, misión, reputación) y colores naranja/amarillo/verde/gris.
+## Author: Addonwowcito
+## Version: 1.0.0
+## SavedVariables: RecetarioForeverDB
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+
+Core.lua
+Scan.lua
+UI.lua
+Tooltip.lua
