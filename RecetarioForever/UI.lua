@@ -221,25 +221,27 @@ local function UpdateDetail()
     add("|cffffd200Nivel en que cambia de color:|r")
     local t = ns.Thresholds(r)
     add("  " .. ns.Colorize("Naranja " .. ns.FormatRange(t.optimal[1], t.optimal[2]), "optimal")
-        .. "   " .. ns.Colorize("Amarillo " .. ns.FormatRange(t.medium[1], t.medium[2]), "medium"))
-    add("  " .. ns.Colorize("Verde " .. ns.FormatRange(t.easy[1], t.easy[2]), "easy")
+        .. "   " .. ns.Colorize("Amarillo " .. ns.FormatRange(t.medium[1], t.medium[2], t.medium.est), "medium"))
+    add("  " .. ns.Colorize("Verde " .. ns.FormatRange(t.easy[1], t.easy[2], t.easy.est), "easy")
         .. "   " .. ns.Colorize("Gris " .. ns.FormatRange(t.trivial[1], t.trivial[2]), "trivial"))
     local complete = true
     for _, d in ipairs({ "medium", "easy", "trivial" }) do
-        if not (t[d][1] and t[d][2] and t[d][1] >= t[d][2]) then complete = false end
+        if not (t[d][1] and t[d][2] and t[d][1] >= t[d][2]) or t[d].est then complete = false end
     end
     if not complete then
-        add("|cff999999(\"5-9\" = cambia entre esos niveles. Se afina solo cada vez que abres la profesión con más nivel, con cualquier pj.)|r")
+        add("|cff999999(\"~\" o \"5-9\" = estimado. Se afina solo al abrir la profesión con más nivel.)|r")
     end
     local splitAt = #L
     add("|cffffd200Cómo se consigue:|r " .. (ns.SOURCE_NAME[r.source or "unknown"] or "?"))
     if r.sourceText and r.sourceText ~= "" then
         add(r.sourceText:gsub("|n", "\n"))
     elseif known then
-        add("|cff999999La API no da la fuente de recetas ya aprendidas. Si otro pj tuyo la ve sin aprender, se completa.|r")
+        add("|cff999999Habla con instructores o vendedores para registrar quién la ofrece.|r")
     else
         add("|cff999999Sin datos de fuente.|r")
     end
+    local qText = ns.QueryQuestieForRecipe and ns.QueryQuestieForRecipe(r)
+    if qText then add("|cff80d0ff" .. qText .. "|r") end
     if r.description and r.description ~= "" then
         add("|cffcccccc" .. ns.StripCodes(r.description) .. "|r")
     end

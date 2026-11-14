@@ -70,6 +70,7 @@ local function Store(prof, key, data, rank)
     r.productName = data.productName or r.productName
     r.recipeID = data.recipeID or r.recipeID
     r.category = data.category or r.category
+    r.classicSeed = nil
     if data.reagents and #data.reagents > 0 then r.reagents = data.reagents end
     if data.sourceText and data.sourceText ~= "" then
         r.sourceText = data.sourceText
@@ -85,6 +86,7 @@ local function Store(prof, key, data, rank)
     if data.description and data.description ~= "" then r.description = data.description end
     if data.apiFields then r.apiFields = data.apiFields end
     if data.diff then ns.RecordObservation(r, data.diff, rank) end
+    if ns.EnrichFromClassic then ns.EnrichFromClassic(r, prof) end
 
     local known = ns.char.known
     known[prof] = known[prof] or {}
@@ -213,6 +215,13 @@ local function ScanModern()
             if data.learned then learnedCount = learnedCount + 1 end
         end
     end
+    -- Quita recetas clásicas sembradas que ya no existen en este servidor
+    if count > 0 and ns.db.recipes[prof] then
+        for k, r in pairs(ns.db.recipes[prof]) do
+            if r.classicSeed then ns.db.recipes[prof][k] = nil end
+        end
+        ns.nameIndex = nil
+    end
     ns.lastScanInfo = string.format("%s (moderno): %d recetas, %d conocidas, nivel %s", prof, count, learnedCount, tostring(rank))
     return true
 end
@@ -290,6 +299,150 @@ local function ScanLegacyCraft()
 end
 
 ---------------------------------------------------------------------------
+-- Registro automático al hablar con vendedores e instructores
+---------------------------------------------------------------------------
+local function FormatMoney(copper)
+    if not copper or copper <= 0 then return "" end
+    local g = math.floor(copper / 10000)
+    local s = math.floor((copper % 10000) / 100)
+    local c = copper % 100
+    local parts = {}
+    if g > 0 then table.insert(parts, g .. "g") end
+    if s > 0 then table.insert(parts, s .. "p") end
+    if c > 0 and g == 0 then table.insert(parts, c .. "c") end
+    return table.concat(parts, " ")
+end
+
+local function AppendSourceLine(r, line)
+    if not line or line == "" then return end
+    if not r.sourceText or r.sourceText == "" then
+        r.sourceText = line
+        return
+    end
+    if r.sourceText:find(line, 1, true) then return end
+    r.sourceText = r.sourceText .. "\n" .. line
+end
+
+local function FindRecipeByItemOrName(itemID, itemName)
+    local idx = ns.GetNameIndex()
+    local hits = {}
+    if itemID then
+        for prof, list in pairs(ns.db.recipes) do
+            for key, r in pairs(list) do
+                if r.recipeItemID == itemID then
+                    table.insert(hits, { prof, key, r })
+                end
+            end
+        end
+    end
+    if #hits == 0 and itemName then
+        local base = itemName:match("^[^:]+:%s*(.+)$")
+        local matches = base and idx[base:lower()]
+        if matches then
+            for _, m in ipairs(matches) do
+                local r = ns.GetRecipe(m[1], m[2])
+                if r then table.insert(hits, { m[1], m[2], r }) end
+            end
+        end
+    end
+    return hits
+end
+
+local function ScanMerchant()
+    if not (GetMerchantNumItems and GetMerchantItemInfo) then return end
+    local npc = UnitName and UnitName("npc")
+    if not npc or npc == "" then return end
+    local zone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    local updated = 0
+    for i = 1, (GetMerchantNumItems() or 0) do
+        local name, _, price, _, _, _, _, extendedCost = GetMerchantItemInfo(i)
+        local link = GetMerchantItemLink and GetMerchantItemLink(i)
+        local itemID = link and tonumber(link:match("item:(%d+)"))
+        if name or itemID then
+            local hits = FindRecipeByItemOrName(itemID, name)
+            for _, h in ipairs(hits) do
+                local r = h[3]
+                if itemID and not r.recipeItemID then r.recipeItemID = itemID end
+                if r.source ~= "reputation" then
+                    r.source = extendedCost and "reputation" or "vendor"
+                end
+                local costStr = FormatMoney(price)
+                local loc = (zone ~= "" and (" (" .. zone .. ")") or "")
+                local note = "Vendedor: " .. npc .. loc .. (costStr ~= "" and (" - " .. costStr) or "")
+                AppendSourceLine(r, note)
+                updated = updated + 1
+            end
+        end
+    end
+    if updated > 0 and ns.RefreshUI then ns.RefreshUI() end
+end
+
+local function ScanTrainer()
+    if not (GetNumTrainerServices and GetTrainerServiceInfo) then return end
+    local npc = UnitName and UnitName("npc")
+    if not npc or npc == "" then return end
+    local zone = (GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or ""
+    local idx = ns.GetNameIndex()
+    local updated = 0
+    for i = 1, (GetNumTrainerServices() or 0) do
+        local name, _, category = GetTrainerServiceInfo(i)
+        if name and category ~= "header" then
+            local matches = idx[name:lower()]
+            if matches then
+                local skillLine, reqLevel
+                if GetTrainerServiceSkillReq then
+                    skillLine, reqLevel = try(GetTrainerServiceSkillReq, i)
+                end
+                local cost = GetTrainerServiceCost and try(GetTrainerServiceCost, i)
+                for _, m in ipairs(matches) do
+                    local prof, r = m[1], ns.GetRecipe(m[1], m[2])
+                    if r and (not skillLine or ns.ResolveProfessionName(skillLine) == prof) then
+                        if reqLevel and reqLevel > 0 and not r.reqSkill then r.reqSkill = reqLevel end
+                        if not r.source or r.source == "unknown" or r.source == "other" then
+                            r.source = "trainer"
+                        end
+                        local costStr = FormatMoney(cost)
+                        local loc = (zone ~= "" and (" (" .. zone .. ")") or "")
+                        local note = "Instructor: " .. npc .. loc .. (costStr ~= "" and (" - " .. costStr) or "")
+                        AppendSourceLine(r, note)
+                        updated = updated + 1
+                    end
+                end
+            end
+        end
+    end
+    if updated > 0 and ns.RefreshUI then ns.RefreshUI() end
+end
+
+-- Consulta opcional a Questie si está instalado en el juego
+function ns.QueryQuestieForRecipe(r)
+    if not (r and r.recipeItemID and _G.QuestieLoader) then return nil end
+    local ok, QDB = pcall(_G.QuestieLoader.ImportModule, _G.QuestieLoader, "QuestieDB")
+    if not (ok and type(QDB) == "table" and QDB.QueryItemSingle) then return nil end
+    local lines = {}
+    local okV, vendors = pcall(QDB.QueryItemSingle, r.recipeItemID, "vendors")
+    if okV and type(vendors) == "table" and #vendors > 0 and QDB.QueryNPCSingle then
+        local names = {}
+        for k = 1, math.min(#vendors, 4) do
+            local okN, npcName = pcall(QDB.QueryNPCSingle, vendors[k], "name")
+            if okN and npcName then table.insert(names, npcName) end
+        end
+        if #names > 0 then table.insert(lines, "Vendedor (Questie): " .. table.concat(names, ", ")) end
+    end
+    local okD, drops = pcall(QDB.QueryItemSingle, r.recipeItemID, "npcDrops")
+    if okD and type(drops) == "table" and #drops > 0 and QDB.QueryNPCSingle then
+        local names = {}
+        for k = 1, math.min(#drops, 3) do
+            local okN, npcName = pcall(QDB.QueryNPCSingle, drops[k], "name")
+            if okN and npcName then table.insert(names, npcName) end
+        end
+        if #names > 0 then table.insert(lines, "Botín (Questie): " .. table.concat(names, ", ")) end
+    end
+    if #lines > 0 then return table.concat(lines, "\n") end
+    return nil
+end
+
+---------------------------------------------------------------------------
 -- Disparadores (con pequeño retardo para no escanear 20 veces seguidas)
 ---------------------------------------------------------------------------
 local pending = {}
@@ -316,6 +469,14 @@ scanFrame:SetScript("OnUpdate", function(self, dt)
         local ok, res = pcall(ScanLegacyCraft)
         did = did or (ok and res)
     end
+    if pending.merchant then
+        pending.merchant = nil
+        pcall(ScanMerchant)
+    end
+    if pending.trainer then
+        pending.trainer = nil
+        pcall(ScanTrainer)
+    end
     if did then
         ns.UpdateCharProfessions()
         if ns.RefreshUI then ns.RefreshUI() end
@@ -334,12 +495,16 @@ function ns.InitScanner()
     local f = CreateFrame("Frame")
     for _, ev in ipairs({ "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_UPDATE",
         "TRADE_SKILL_DATA_SOURCE_CHANGED", "NEW_RECIPE_LEARNED", "CRAFT_SHOW", "CRAFT_UPDATE",
-        "TRADE_SKILL_CLOSE" }) do
+        "TRADE_SKILL_CLOSE", "MERCHANT_SHOW", "MERCHANT_UPDATE", "TRAINER_SHOW", "TRAINER_UPDATE" }) do
         ns.SafeRegister(f, ev)
     end
     f:SetScript("OnEvent", function(self, event)
         if event == "CRAFT_SHOW" or event == "CRAFT_UPDATE" then
             Queue("craft")
+        elseif event == "MERCHANT_SHOW" or event == "MERCHANT_UPDATE" then
+            Queue("merchant")
+        elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
+            Queue("trainer")
         elseif event == "TRADE_SKILL_CLOSE" then
             expandedOnce = false
         else

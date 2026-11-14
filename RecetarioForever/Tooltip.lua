@@ -59,8 +59,8 @@ local function AddInfo(tt, itemName)
             if #by > 0 then tt:AddLine("  La conocen: " .. table.concat(by, ", "), 0.8, 0.8, 0.8) end
             local t = ns.Thresholds(r)
             tt:AddLine("  " .. ns.Colorize(ns.FormatRange(t.optimal[1], t.optimal[2]), "optimal") .. " / "
-                .. ns.Colorize(ns.FormatRange(t.medium[1], t.medium[2]), "medium") .. " / "
-                .. ns.Colorize(ns.FormatRange(t.easy[1], t.easy[2]), "easy") .. " / "
+                .. ns.Colorize(ns.FormatRange(t.medium[1], t.medium[2], t.medium.est), "medium") .. " / "
+                .. ns.Colorize(ns.FormatRange(t.easy[1], t.easy[2], t.easy.est), "easy") .. " / "
                 .. ns.Colorize(ns.FormatRange(t.trivial[1], t.trivial[2]), "trivial"))
         end
     end

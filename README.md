@@ -11,5 +11,6 @@ WoW no permite hacer peticiones HTTP desde dentro del juego. Para no repetir con
 3. Dentro del juego, abre `/recetas` y pulsa **Cargar ForeverDB** (o `/recetas importar`): los datos se guardan en `RecetarioForeverDB` para toda tu cuenta.
 
 ## Créditos
-<a href="https://foreverdb.net">Data from ForeverDB.net</a>
+- <a href="https://foreverdb.net">Data from ForeverDB.net</a>
+- Datos base de recetas clásicas derivados de [LibCrafts-1.0](https://github.com/refaim/LibCrafts-1.0) (MIT License, Copyright (c) 2024 Roman Kharitonov).
 

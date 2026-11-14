@@ -1,4 +1,4 @@
-﻿-- Recetario Forever - Base de datos estÃ¡tica de ForeverDB.net
+-- Recetario Forever - Base de datos estÃ¡tica de ForeverDB.net
 -- Este archivo se rellena ejecutando una sola vez `tools/sync_foreverdb.py`
 -- (o colocando aquÃ­ tus recetas exportadas) y se carga por cuenta al pulsar
 -- el botÃ³n "Cargar ForeverDB" dentro del addon.

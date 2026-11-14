@@ -236,8 +236,9 @@ function ns.Thresholds(r)
         end
         res.optimal = { nil, hi }
     end
+    local gray = r.fixed and r.fixed[4]
     for i = 2, 4 do
-        local lo, hi
+        local lo, hi, est
         for j = 1, i - 1 do
             local x = o[order[j]]
             if x then lo = math.max(lo or 0, x[2] + 1) end
@@ -246,16 +247,24 @@ function ns.Thresholds(r)
             local x = o[order[j]]
             if x then hi = math.min(hi or 9999, x[1]) end
         end
-        -- Datos fijos (si alguna vez se cargan desde una base estática)
-        if r.fixed and r.fixed[i] then lo, hi = r.fixed[i], r.fixed[i] end
-        res[order[i]] = { lo, hi }
+        -- Datos fijos (ForeverDB)
+        if r.fixed and r.fixed[i] then
+            lo, hi = r.fixed[i], r.fixed[i]
+        elseif gray and (i == 2 or i == 3) and not (lo and hi and lo >= hi) then
+            -- Patrón Classic/Forever: verde ~20 y amarillo ~40 por debajo de gris
+            local guess = math.max(r.reqSkill or 1, gray - (i == 2 and 40 or 20))
+            if lo then guess = math.max(lo, guess) end
+            if hi then guess = math.min(hi, guess) end
+            lo, hi, est = guess, guess, true
+        end
+        res[order[i]] = { lo, hi, est = est }
     end
     return res
 end
 
-function ns.FormatRange(lo, hi)
+function ns.FormatRange(lo, hi, est)
     if lo and hi then
-        if lo >= hi then return tostring(hi) end
+        if lo >= hi then return (est and "~" or "") .. tostring(hi) end
         return lo .. "-" .. hi
     elseif hi then
         return "<=" .. hi
@@ -292,7 +301,8 @@ function ns.PredictDiff(r, rank)
         if th[1] and th[1] > rank then upper = i - 1 end
     end
     if lower then
-        return order[lower], (lower == upper)
+        local anyEst = (t.medium and t.medium.est) or (t.easy and t.easy.est)
+        return order[lower], (lower == upper and not anyEst)
     end
     if next(o) == nil and not r.reqSkill then return "unknown", false end
     return order[upper], false
@@ -328,6 +338,105 @@ local function ResolveProfessionName(prof)
         if PROF_CANON[name:lower()] == canon then return name end
     end
     return prof
+end
+ns.ResolveProfessionName = ResolveProfessionName
+
+local PROF_ES = {
+    ["Alchemy"] = "Alquimia", ["Blacksmithing"] = "Herrería", ["Cooking"] = "Cocina",
+    ["Enchanting"] = "Encantamiento", ["Engineering"] = "Ingeniería", ["First Aid"] = "Primeros auxilios",
+    ["Leatherworking"] = "Peletería", ["Mining"] = "Minería", ["Tailoring"] = "Sastrería",
+}
+
+local classicIndex
+function ns.GetClassicIndex()
+    if classicIndex then return classicIndex end
+    local byId, byName, byRec = {}, {}, {}
+    for _, e in ipairs(ns.ClassicDB or {}) do
+        if e.id then byId[e.id] = e end
+        if e.en then byName[e.en:lower()] = e end
+        if e.es then byName[e.es:lower()] = e end
+        if e.mx then byName[e.mx:lower()] = e end
+        if e.rec then byRec[e.rec] = e end
+    end
+    classicIndex = { byId = byId, byName = byName, byRec = byRec }
+    return classicIndex
+end
+
+function ns.EnrichFromClassic(r, prof)
+    if not r or not ns.ClassicDB then return end
+    local idx = ns.GetClassicIndex()
+    local e = (r.recipeID and idx.byId[r.recipeID]) or (r.name and idx.byName[r.name:lower()])
+    if not e then return end
+    if e.req and not r.reqSkill then r.reqSkill = e.req end
+    if e.rec and not r.recipeItemID then r.recipeItemID = e.rec end
+    if e.prod and not r.productID then r.productID = e.prod end
+    if e.src and (not r.source or r.source == "unknown") then r.source = e.src end
+    if e.st and (not r.sourceText or r.sourceText == "") then r.sourceText = e.st end
+    if e.rg and (not r.reagents or #r.reagents == 0) then
+        local list = {}
+        for _, pair in ipairs(e.rg) do
+            table.insert(list, { itemID = pair[1], count = pair[2] })
+        end
+        r.reagents = list
+    end
+end
+
+function ns.ApplyClassicDB(quiet)
+    if not ns.ClassicDB or #ns.ClassicDB == 0 then return 0 end
+    local enriched, seeded = 0, 0
+    -- 1) Enriquecer recetas ya escaneadas del cliente
+    for prof, list in pairs(ns.db.recipes) do
+        for _, r in pairs(list) do
+            local hadReq, hadSrc = r.reqSkill, r.sourceText
+            ns.EnrichFromClassic(r, prof)
+            if (not hadReq and r.reqSkill) or (not hadSrc and r.sourceText) then
+                enriched = enriched + 1
+            end
+        end
+    end
+    -- 2) Para profesiones aún no escaneadas, cargar base clásica para poder buscarlas
+    local loc = (GetLocale and GetLocale()) or "enUS"
+    local isES = (loc == "esES" or loc == "esMX")
+    local scannedCanon = {}
+    for prof, list in pairs(ns.db.recipes) do
+        if next(list) ~= nil then
+            scannedCanon[PROF_CANON[prof:lower()] or prof:lower()] = true
+        end
+    end
+    for _, e in ipairs(ns.ClassicDB) do
+        local canon = PROF_CANON[e.prof:lower()] or e.prof:lower()
+        if not scannedCanon[canon] then
+            local profName = ResolveProfessionName(e.prof)
+            if profName == e.prof and isES and PROF_ES[e.prof] then profName = PROF_ES[e.prof] end
+            ns.db.recipes[profName] = ns.db.recipes[profName] or {}
+            if not ns.db.recipes[profName][e.id] then
+                local r = {
+                    name = ns.ClassicName and ns.ClassicName(e) or e.en,
+                    recipeID = e.id,
+                    reqSkill = e.req,
+                    source = e.src,
+                    sourceText = e.st,
+                    recipeItemID = e.rec,
+                    productID = e.prod,
+                    classicSeed = true,
+                    obs = {},
+                }
+                if e.rg then
+                    r.reagents = {}
+                    for _, pair in ipairs(e.rg) do
+                        table.insert(r.reagents, { itemID = pair[1], count = pair[2] })
+                    end
+                end
+                ns.db.recipes[profName][e.id] = r
+                seeded = seeded + 1
+            end
+        end
+    end
+    ns.nameIndex = nil
+    if not quiet and (enriched > 0 or seeded > 0) then
+        ns.Print(string.format("Base clásica (LibCrafts): %d actualizadas, %d cargadas.", enriched, seeded))
+    end
+    return enriched + seeded
 end
 
 local function FindExistingRecipeKey(profList, ext)
@@ -470,6 +579,7 @@ core:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         if not ns.db then ns.InitDB() end
         ns.UpdateCharProfessions()
+        if ns.ApplyClassicDB then ns.ApplyClassicDB(true) end
         if ns.CreateMinimapButton then ns.CreateMinimapButton() end
         if ns.InitScanner then ns.InitScanner() end
         if ns.InitTooltip then ns.InitTooltip() end

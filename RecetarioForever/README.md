@@ -17,9 +17,9 @@ Addon para **WoW Forever** (cliente 1.60.x, interfaz 16001).
 - Pasa el mouse por una receta (Receta:/Patrón:/Diseño:) para ver si ya la conoces y quién de tus pjs la tiene.
 
 ## Cómo calcula los colores
-El juego no siempre informa directamente en qué nivel una receta pasa a amarillo/verde/gris.
-El addon guarda en qué nivel viste cada color cada vez que abres la profesión (con cualquier pj de la cuenta)
-y deduce los cortes. Al principio verás rangos (`120-135`); se vuelven exactos a medida que subes.
+- Si el cliente informa `maxTrivialLevel` (gris), estima amarillo (`gris - 40`) y verde (`gris - 20`) marcados con `~`.
+- Cada vez que abres una profesión con más nivel (con cualquier personaje), el addon registra los colores reales y reemplaza la estimación por los cortes exactos.
+- Al hablar con vendedores o instructores, registra automáticamente qué recetas venden o enseñan (NPC, zona y precio).
 
 ## Comandos
 - `/recetas debug` – muestra versión del cliente y qué funciones del juego existen.
@@ -29,5 +29,6 @@ y deduce los cortes. Al principio verás rangos (`120-135`); se vuelven exactos 
 - `/recetas borrar` – reinicia la base de datos.
 
 ## Créditos
-<a href="https://foreverdb.net">Data from ForeverDB.net</a>
+- <a href="https://foreverdb.net">Data from ForeverDB.net</a>
+- Datos base de recetas clásicas derivados de [LibCrafts-1.0](https://github.com/refaim/LibCrafts-1.0) (MIT License, Copyright (c) 2024 Roman Kharitonov).
 
