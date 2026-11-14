@@ -592,6 +592,10 @@ local function CreateUI()
     infoText = MakeFont(F, "GameFontDisableSmall")
     infoText:SetPoint("BOTTOMLEFT", LIST_X, 18)
 
+    local creditText = MakeFont(F, "GameFontDisableSmall")
+    creditText:SetPoint("BOTTOMRIGHT", F, "BOTTOMLEFT", LIST_X + LIST_W, 18)
+    creditText:SetText("Data from ForeverDB.net")
+
     local hint = MakeFont(F, "GameFontDisableSmall")
     hint:SetPoint("BOTTOMLEFT", 20, 18)
     hint:SetWidth(165)
@@ -603,7 +607,6 @@ local function CreateUI()
     d:SetPoint("TOPLEFT", DETAIL_X, -132)
     d:SetPoint("BOTTOMRIGHT", -18, 16)
     SetBackdropSafe(d, "Interface\\Tooltips\\UI-Tooltip-Background", "Interface\\Tooltips\\UI-Tooltip-Border", 14, 3)
-    if d.SetBackdropColor then d:SetBackdropColor(0, 0, 0, 0.6) end
     detail.frame = d
     detail.icon = d:CreateTexture(nil, "ARTWORK")
     detail.icon:SetSize(32, 32)

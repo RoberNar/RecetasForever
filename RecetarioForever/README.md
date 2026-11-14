@@ -26,3 +26,7 @@ y deduce los cortes. Al principio verás rangos (`120-135`); se vuelven exactos 
 - `/recetas api` – lista las funciones disponibles en `C_TradeSkillUI` y si hay bases externas cargadas.
 - `/recetas campos` – muestra los datos crudos de la receta elegida.
 - `/recetas borrar` – reinicia la base de datos.
+
+## Créditos
+<a href="https://foreverdb.net">Data from ForeverDB.net</a>
+
