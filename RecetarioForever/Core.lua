@@ -224,7 +224,9 @@ function ns.Thresholds(r)
     local order = ns.DIFF_ORDER
     local res = {}
     -- Naranja empieza en el nivel requerido para aprenderla
-    if r.reqSkill then
+    if r.fixed and r.fixed[1] then
+        res.optimal = { r.fixed[1], r.fixed[1] }
+    elseif r.reqSkill then
         res.optimal = { r.reqSkill, r.reqSkill }
     else
         local hi
@@ -294,6 +296,109 @@ function ns.PredictDiff(r, rank)
     end
     if next(o) == nil and not r.reqSkill then return "unknown", false end
     return order[upper], false
+end
+
+---------------------------------------------------------------------------
+-- Carga única de datos externos (ForeverDB.net) guardada por cuenta
+---------------------------------------------------------------------------
+local PROF_CANON = {
+    ["alchemy"] = "alquimia", ["alquimia"] = "alquimia",
+    ["blacksmithing"] = "herreria", ["herrería"] = "herreria", ["herreria"] = "herreria",
+    ["enchanting"] = "encantamiento", ["encantamiento"] = "encantamiento",
+    ["engineering"] = "ingenieria", ["ingeniería"] = "ingenieria", ["ingenieria"] = "ingenieria",
+    ["leatherworking"] = "peleteria", ["peletería"] = "peleteria", ["peleteria"] = "peleteria",
+    ["tailoring"] = "sastreria", ["sastrería"] = "sastreria", ["sastreria"] = "sastreria",
+    ["cooking"] = "cocina", ["cocina"] = "cocina",
+    ["first aid"] = "primeros auxilios", ["primeros auxilios"] = "primeros auxilios",
+    ["mining"] = "mineria", ["minería"] = "mineria", ["mineria"] = "mineria",
+    ["smelting"] = "fundicion", ["fundición"] = "fundicion", ["fundicion"] = "fundicion",
+    ["jewelcrafting"] = "joyeria", ["joyería"] = "joyeria", ["joyeria"] = "joyeria",
+    ["inscription"] = "inscripcion", ["inscripción"] = "inscripcion", ["inscripcion"] = "inscripcion",
+}
+
+local function ResolveProfessionName(prof)
+    if not prof then return nil end
+    if ns.db.recipes[prof] or ns.char.profs[prof] then return prof end
+    local canon = PROF_CANON[prof:lower()]
+    if not canon then return prof end
+    for name in pairs(ns.char.profs) do
+        if PROF_CANON[name:lower()] == canon then return name end
+    end
+    for name in pairs(ns.db.recipes) do
+        if PROF_CANON[name:lower()] == canon then return name end
+    end
+    return prof
+end
+
+local function FindExistingRecipeKey(profList, ext)
+    if ext.id and profList[ext.id] then return ext.id end
+    if ext.name then
+        local target = ext.name:lower()
+        for k, r in pairs(profList) do
+            if (r.name and r.name:lower() == target) or (ext.id and r.recipeID == ext.id) then
+                return k
+            end
+        end
+    end
+    return ext.id or ext.name
+end
+
+function ns.ApplyExternalDB(quiet)
+    local ext = ns.ExternalDB
+    if not ext or type(ext.recipes) ~= "table" or #ext.recipes == 0 then
+        if not quiet then
+            ns.Print("ForeverDB_Data.lua está vacío. Configura tu token en tools/foreverdb_config.json y ejecuta sync_foreverdb.py una vez.")
+        end
+        return 0
+    end
+    local count = 0
+    for _, item in ipairs(ext.recipes) do
+        local prof = ResolveProfessionName(item.prof)
+        if prof and (item.id or item.name) then
+            ns.db.recipes[prof] = ns.db.recipes[prof] or {}
+            local profList = ns.db.recipes[prof]
+            local key = FindExistingRecipeKey(profList, item)
+            local r = profList[key]
+            if not r then
+                r = { obs = {} }
+                profList[key] = r
+            end
+            r.name = item.name or r.name
+            r.recipeID = item.id or r.recipeID
+            r.icon = item.icon or r.icon
+            r.productID = item.productID or r.productID
+            if item.reqSkill and item.reqSkill > 0 then r.reqSkill = item.reqSkill end
+            if type(item.thresholds) == "table" then
+                r.fixed = r.fixed or {}
+                for i = 1, 4 do
+                    if item.thresholds[i] and item.thresholds[i] > 0 then
+                        r.fixed[i] = item.thresholds[i]
+                    end
+                end
+                if not r.reqSkill and r.fixed[1] then r.reqSkill = r.fixed[1] end
+            end
+            if item.sourceText and item.sourceText ~= "" then
+                r.sourceText = item.sourceText
+                r.source = item.source or ns.ClassifySource(item.sourceText)
+            elseif item.source then
+                r.source = item.source
+            end
+            if item.reagents and #item.reagents > 0 and (not r.reagents or #r.reagents == 0) then
+                r.reagents = item.reagents
+            end
+            count = count + 1
+        end
+    end
+    ns.nameIndex = nil
+    ns.db.externalApplied = {
+        count = count,
+        updatedAt = (ext.meta and ext.meta.updatedAt) or (date and date("%Y-%m-%d %H:%M")) or "",
+        source = ext.meta and ext.meta.source or "ForeverDB.net",
+    }
+    if not quiet then
+        ns.Print("Cargadas " .. count .. " recetas de " .. ns.db.externalApplied.source .. " (guardado para toda la cuenta).")
+    end
+    return count
 end
 
 ---------------------------------------------------------------------------
@@ -440,6 +545,9 @@ SlashCmdList["RECETARIOFOREVER"] = function(msg)
         DumpTradeSkillAPI()
     elseif msg == "campos" then
         if ns.DumpSelectedFields then ns.DumpSelectedFields() end
+    elseif msg == "importar" then
+        ns.ApplyExternalDB(false)
+        if ns.RefreshUI then ns.RefreshUI() end
     elseif msg == "borrar" then
         ns.Print("Para borrar TODO escribe: /recetas borrar confirmar")
     elseif msg == "borrar confirmar" then
@@ -449,7 +557,7 @@ SlashCmdList["RECETARIOFOREVER"] = function(msg)
         if ns.RefreshUI then ns.RefreshUI() end
         ns.Print("Base de datos borrada.")
     elseif msg == "ayuda" or msg == "help" then
-        ns.Print("/recetas - abrir/cerrar | /recetas debug - info del cliente | /recetas api - funciones de profesiones | /recetas campos - datos API de la receta elegida | /recetas borrar - reiniciar datos")
+        ns.Print("/recetas - abrir/cerrar | /recetas debug - info del cliente | /recetas api - funciones de profesiones | /recetas campos - datos API de la receta elegida | /recetas importar - cargar datos de ForeverDB | /recetas borrar - reiniciar datos")
     else
         if ns.ToggleUI then ns.ToggleUI() end
     end

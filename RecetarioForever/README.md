@@ -25,6 +25,7 @@ y deduce los cortes. Al principio verás rangos (`120-135`); se vuelven exactos 
 - `/recetas debug` – muestra versión del cliente y qué funciones del juego existen.
 - `/recetas api` – lista las funciones disponibles en `C_TradeSkillUI` y si hay bases externas cargadas.
 - `/recetas campos` – muestra los datos crudos de la receta elegida.
+- `/recetas importar` – carga los datos de `ForeverDB_Data.lua` en la base de tu cuenta (igual que el botón **Cargar ForeverDB**).
 - `/recetas borrar` – reinicia la base de datos.
 
 ## Créditos

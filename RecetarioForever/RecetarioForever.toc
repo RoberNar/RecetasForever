@@ -7,6 +7,7 @@
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 
 Core.lua
+ForeverDB_Data.lua
 Scan.lua
 UI.lua
 Tooltip.lua

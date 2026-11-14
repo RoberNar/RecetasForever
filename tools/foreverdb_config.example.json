@@ -1,0 +1,19 @@
+{
+  "token": "PEGA_AQUI_TU_TOKEN_DE_FOREVERDB",
+  "base_url": "https://foreverdb.net",
+  "auth_header": "Authorization",
+  "auth_prefix": "Bearer ",
+  "recipes_endpoint": "/api/recipes",
+  "request_delay_sec": 1.5,
+  "professions": [
+    "alchemy",
+    "blacksmithing",
+    "cooking",
+    "enchanting",
+    "engineering",
+    "first-aid",
+    "leatherworking",
+    "mining",
+    "tailoring"
+  ]
+}

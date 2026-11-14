@@ -1,0 +1,6 @@
+# Token y caché local de ForeverDB (nunca subir al repo)
+tools/foreverdb_config.json
+tools/cache/
+.env
+__pycache__/
+*.pyc

@@ -484,6 +484,33 @@ local function CreateUI()
         ns.RefreshUI()
     end)
 
+    local loadExt = CreateFrame("Button", nil, F, "UIPanelButtonTemplate")
+    loadExt:SetSize(125, 20)
+    loadExt:SetPoint("RIGHT", allSrc, "LEFT", -6, 0)
+    loadExt:SetText("Cargar ForeverDB")
+    loadExt:SetScript("OnClick", function()
+        ns.ApplyExternalDB(false)
+        ns.RefreshUI()
+    end)
+    loadExt:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine("Cargar datos de ForeverDB.net")
+        local n = (ns.ExternalDB and ns.ExternalDB.recipes) and #ns.ExternalDB.recipes or 0
+        if n > 0 then
+            GameTooltip:AddLine("Listas en ForeverDB_Data.lua: " .. n .. " recetas.", 0.3, 1, 0.3, true)
+            GameTooltip:AddLine("Pulsa para guardarlas en la base de tu cuenta.", 1, 1, 1, true)
+        else
+            GameTooltip:AddLine("ForeverDB_Data.lua está vacío (0 recetas).", 1, 0.5, 0.3, true)
+            GameTooltip:AddLine("Pon tu token en tools/foreverdb_config.json y ejecuta sync_foreverdb.py una vez.", 0.85, 0.85, 0.85, true)
+        end
+        local app = ns.db and ns.db.externalApplied
+        if app and app.count and app.count > 0 then
+            GameTooltip:AddLine("Última carga por cuenta: " .. app.count .. " recetas (" .. tostring(app.updatedAt or "") .. ")", 0.7, 0.85, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    loadExt:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     -- Filtro por color (a TU nivel actual)
     local cl = MakeFont(F, "GameFontNormalSmall")
     cl:SetPoint("TOPLEFT", LIST_X, -112)
